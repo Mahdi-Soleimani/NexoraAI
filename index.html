@@ -33,7 +33,19 @@
             background-position: 0 0;
             animation: hexMove 30s linear infinite;
         }
+
+        /* --- انیمیشن‌ها (اصلاح شده) --- */
         @keyframes hexMove { 100% { background-position: 40px 40px; } }
+        
+        /* انیمیشن خط اسکن نوری */
+        @keyframes scanDown { 
+            0% { top: -10%; opacity: 0; } 
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 110%; opacity: 0; } 
+        }
+
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         /* --- کانتینر آواتار سه‌بعدی --- */
         #avatar-container {
@@ -43,7 +55,7 @@
         }
         #avatar-canvas { width: 100%; height: 100%; border-radius: 50%; }
 
-        /* --- شیشه‌ای و نئونی (Glassmorphism) --- */
+        /* --- شیشه‌ای و نئونی --- */
         .glass-panel {
             background: rgba(10, 15, 30, 0.7);
             backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -74,6 +86,8 @@
             display: flex; justify-content: space-around;
             transform: translateY(20px); opacity: 0; pointer-events: none;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
         }
         .attachment-menu.active {
             transform: translateY(0); opacity: 1; pointer-events: auto;
@@ -92,10 +106,9 @@
         /* استایل‌های مارک‌داون */
         .prose pre { background: #0f172a !important; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin: 10px 0; overflow-x: auto; direction: ltr; font-family: monospace; }
         .prose code { color: #22d3ee; font-size: 0.9em; background: rgba(34,211,238,0.1); padding: 2px 4px; border-radius: 4px; }
-        .prose pre code { background: transparent; padding: 0; }
         .prose p { margin-bottom: 0.8em; }
         .prose strong { color: #a855f7; font-weight: 800; }
-        .prose ul, .prose ol { padding-right: 20px; }
+        .prose ul { padding-right: 20px; list-style: disc; }
 
         #chatContainer::-webkit-scrollbar { width: 4px; }
         #chatContainer::-webkit-scrollbar-thumb { background: rgba(6,182,212,0.3); border-radius: 4px; }
@@ -109,8 +122,10 @@
 
     <canvas id="neuralCanvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
     <div class="hex-bg"></div>
-    <div class="fixed inset-0 pointer-events-none z-[1] overflow-hidden"><div class="w-full h-2 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent absolute top-0 animate-[scan_5s_linear_infinite]"></div></div>
-    @keyframes scan { 0% { top: -10%; } 100% { top: 110%; } }
+    
+    <div class="fixed inset-0 pointer-events-none z-[1] overflow-hidden">
+        <div class="w-full h-2 bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent absolute animate-[scanDown_5s_linear_infinite]"></div>
+    </div>
 
     <div class="relative z-20 pt-4 pb-2 bg-gradient-to-b from-black via-black/80 to-transparent">
         <div class="text-center">
@@ -144,7 +159,7 @@
     <div class="fixed bottom-0 left-0 right-0 z-30 p-4">
         <div class="max-w-3xl mx-auto relative group">
             
-            <div id="attachMenu" class="glass-panel attachment-menu">
+            <div id="attachMenu" class="attachment-menu">
                 <div class="attach-btn" onclick="handleAttachClick('photo')">
                     <div class="attach-icon-bg"><svg class="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     <span class="text-xs">عکس</span>
@@ -180,8 +195,7 @@
 
     <script>
         // =======================================================
-        // 🔴 آدرس وب‌هوک خود را اینجا وارد کنید
-        // =======================================================
+        // 🔴 آدرس وب‌هوک خود را اینجا وارد کنید (حتما چک کنید)
         const N8N_WEBHOOK_URL = 'https://50356-4vb9a.s3.irann8n.com/webhook/c672b169-fcf2-4c16-8b53-c0fe4835125e'; 
         // =======================================================
 
@@ -190,7 +204,6 @@
 
         marked.use({ breaks: true });
 
-        // --- المان‌ها ---
         const chatContainer = document.getElementById('chatContainer');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
@@ -199,7 +212,7 @@
         const attachToggleBtn = document.getElementById('attachToggleBtn');
         const attachMenu = document.getElementById('attachMenu');
 
-        // --- مدیریت اتچمنت و هپتیک ---
+        // مدیریت اتچمنت
         attachToggleBtn.addEventListener('click', () => {
             attachMenu.classList.toggle('active');
             hapticFeedback('light');
@@ -207,13 +220,10 @@
 
         function handleAttachClick(type) {
              hapticFeedback('medium');
-             // اینجا در آینده کدهای مربوط به باز شدن فایل پیکر تلگرام قرار می‌گیرد
-             // فعلاً یک پیام نمایشی می‌دهیم
              appendMessage(`[ارسال ${type} فعلاً غیرفعال است]`, 'user');
              attachMenu.classList.remove('active');
         }
 
-        // تابع کمکی برای هپتیک فیدبک پیشرفته
         function hapticFeedback(type) {
             if (!tg.HapticFeedback) return;
             switch(type) {
@@ -229,7 +239,6 @@
             this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; if(this.value === '') this.style.height = 'auto';
         });
 
-        // --- توابع چت ---
         function appendMessage(text, sender) {
             const div = document.createElement('div');
             const isUser = sender === 'user';
@@ -261,8 +270,7 @@
 
         async function handleSend() {
             const text = messageInput.value.trim(); if (!text) return;
-            hapticFeedback('light'); // ویبره هنگام ارسال
-            attachMenu.classList.remove('active'); // بستن منوی اتچمنت اگر باز بود
+            hapticFeedback('light'); attachMenu.classList.remove('active');
 
             appendMessage(text, 'user');
             messageInput.value = ''; messageInput.style.height = 'auto';
@@ -279,10 +287,10 @@
                 const data = await response.json();
                 const reply = data.response || data.output || data.message || JSON.stringify(data);
                 removeTyping(); appendMessage(reply, 'ai');
-                hapticFeedback('success'); // ویبره موفقیت
+                hapticFeedback('success');
             } catch (err) {
                 console.error(err); removeTyping(); appendMessage("⚠️ خطای ارتباط با سرور.", 'ai');
-                hapticFeedback('error'); // ویبره خطا
+                hapticFeedback('error');
             } finally {
                 sendBtn.disabled = false; sendIcon.classList.remove('hidden'); loadingIcon.classList.add('hidden'); messageInput.focus();
             }
@@ -291,7 +299,7 @@
         sendBtn.addEventListener('click', handleSend);
         messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
 
-        // --- Three.js: آواتار سه‌بعدی هولوگرافیک ---
+        // --- Three.js: آواتار سه‌بعدی ---
         const avatarContainer = document.getElementById('avatar-container');
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
@@ -300,16 +308,11 @@
         renderer.domElement.id = 'avatar-canvas';
         avatarContainer.appendChild(renderer.domElement);
 
-        // ساخت مدل هندسی (سر ربات)
         const geometry = new THREE.IcosahedronGeometry(1.8, 1);
-        const material = new THREE.MeshPhongMaterial({
-            color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.5,
-            emissive: 0x06b6d4, emissiveIntensity: 0.5
-        });
+        const material = new THREE.MeshPhongMaterial({ color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.5, emissive: 0x06b6d4, emissiveIntensity: 0.5 });
         const sphere = new THREE.Mesh(geometry, material);
         scene.add(sphere);
 
-        // حلقه‌های دور سر
         const ringGeo = new THREE.TorusGeometry(2.5, 0.05, 16, 100);
         const ringMat = new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.7 });
         const ring1 = new THREE.Mesh(ringGeo, ringMat);
@@ -317,7 +320,6 @@
         ring2.rotation.x = Math.PI / 2;
         scene.add(ring1); scene.add(ring2);
 
-        // نورپردازی
         const light1 = new THREE.PointLight(0x06b6d4, 2, 50); light1.position.set(5, 5, 5); scene.add(light1);
         const light2 = new THREE.PointLight(0xa855f7, 2, 50); light2.position.set(-5, -5, 5); scene.add(light2);
         camera.position.z = 5;
@@ -331,66 +333,45 @@
         }
         animate3D();
 
-        // --- شبکه عصبی واکنش‌گرا به تاچ ---
+        // --- شبکه عصبی واکنش‌گرا ---
         const neuralCanvas = document.getElementById('neuralCanvas');
         const nCtx = neuralCanvas.getContext('2d');
         let nParticles = [];
-        let mouse = { x: null, y: null, radius: 100 }; // شعاع تأثیر موس/تاچ
+        let mouse = { x: null, y: null, radius: 100 };
 
         function resizeNeural() { neuralCanvas.width = window.innerWidth; neuralCanvas.height = window.innerHeight; }
         window.addEventListener('resize', resizeNeural); resizeNeural();
-
         window.addEventListener('mousemove', (e) => { mouse.x = e.x; mouse.y = e.y; });
         window.addEventListener('touchmove', (e) => { mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; });
         window.addEventListener('touchend', () => { mouse.x = null; mouse.y = null; });
-        window.addEventListener('mouseout', () => { mouse.x = null; mouse.y = null; });
 
         class Particle {
             constructor() {
                 this.x = Math.random() * neuralCanvas.width; this.y = Math.random() * neuralCanvas.height;
-                this.size = Math.random() * 1.5 + 0.5;
-                this.baseX = this.x; this.baseY = this.y;
-                this.density = (Math.random() * 30) + 1;
+                this.size = Math.random() * 1.5 + 0.5; this.baseX = this.x; this.baseY = this.y; this.density = (Math.random() * 30) + 1;
             }
-            draw() {
-                nCtx.fillStyle = 'rgba(6, 182, 212, 0.6)';
-                nCtx.beginPath(); nCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2); nCtx.closePath(); nCtx.fill();
-            }
+            draw() { nCtx.fillStyle = 'rgba(6, 182, 212, 0.6)'; nCtx.beginPath(); nCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2); nCtx.fill(); }
             update() {
                 let dx = mouse.x - this.x; let dy = mouse.y - this.y;
                 let distance = Math.sqrt(dx*dx + dy*dy);
                 let forceDirectionX = dx / distance; let forceDirectionY = dy / distance;
-                let maxDistance = mouse.radius;
-                let force = (maxDistance - distance) / maxDistance;
-                let directionX = forceDirectionX * force * this.density;
-                let directionY = forceDirectionY * force * this.density;
-
-                if (distance < mouse.radius) {
-                    this.x -= directionX; this.y -= directionY; // فرار از موس
-                } else {
-                    // بازگشت به موقعیت اولیه
-                    if (this.x !== this.baseX) { let dx = this.x - this.baseX; this.x -= dx/10; }
-                    if (this.y !== this.baseY) { let dy = this.y - this.baseY; this.y -= dy/10; }
-                }
+                let force = (mouse.radius - distance) / mouse.radius;
+                if (distance < mouse.radius) { this.x -= forceDirectionX * force * this.density; this.y -= forceDirectionY * force * this.density; }
+                else { if (this.x !== this.baseX) this.x -= (this.x - this.baseX)/10; if (this.y !== this.baseY) this.y -= (this.y - this.baseY)/10; }
             }
         }
-
         for (let i = 0; i < 70; i++) { nParticles.push(new Particle()); }
 
         function animateNeural() {
             nCtx.clearRect(0, 0, neuralCanvas.width, neuralCanvas.height);
             for (let i = 0; i < nParticles.length; i++) {
                 nParticles[i].draw(); nParticles[i].update();
-                // رسم خطوط شبکه عصبی
                 for (let j = i; j < nParticles.length; j++) {
-                    let dx = nParticles[i].x - nParticles[j].x;
-                    let dy = nParticles[i].y - nParticles[j].y;
+                    let dx = nParticles[i].x - nParticles[j].x; let dy = nParticles[i].y - nParticles[j].y;
                     let distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance < 100) {
                         nCtx.beginPath(); nCtx.strokeStyle = `rgba(6, 182, 212, ${0.3 - distance/100})`;
-                        nCtx.lineWidth = 0.5; nCtx.moveTo(nParticles[i].x, nParticles[i].y);
-                        nCtx.lineTo(nParticles[j].x, nParticles[j].y); nCtx.stroke();
-                        nCtx.closePath();
+                        nCtx.lineWidth = 0.5; nCtx.moveTo(nParticles[i].x, nParticles[i].y); nCtx.lineTo(nParticles[j].x, nParticles[j].y); nCtx.stroke();
                     }
                 }
             }
