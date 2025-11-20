@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexora AI Ultimate</title>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #000;
+            color: white;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- پس‌زمینه و افکت‌ها --- */
+        .hex-bg {
+            position: fixed; inset: 0; opacity: 0.1; pointer-events: none; z-index: 0;
+            background-image: linear-gradient(30deg, #06b6d4 1px, transparent 1px), linear-gradient(150deg, #a855f7 1px, transparent 1px);
+            background-size: 40px 40px;
+            background-position: 0 0;
+            animation: hexMove 30s linear infinite;
+        }
+        @keyframes hexMove { 100% { background-position: 40px 40px; } }
+
+        /* --- کانتینر آواتار سه‌بعدی --- */
+        #avatar-container {
+            width: 120px; height: 120px;
+            margin: 0 auto; position: relative; z-index: 25;
+            filter: drop-shadow(0 0 15px rgba(6,182,212,0.5));
+        }
+        #avatar-canvas { width: 100%; height: 100%; border-radius: 50%; }
+
+        /* --- شیشه‌ای و نئونی (Glassmorphism) --- */
+        .glass-panel {
+            background: rgba(10, 15, 30, 0.7);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(6,182,212, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .msg-user {
+            background: linear-gradient(135deg, rgba(6,182,212,0.25), rgba(168,85,247,0.25));
+            backdrop-filter: blur(10px); border: 1px solid rgba(6,182,212,0.3);
+            color: #e2e8f0; border-radius: 20px 4px 20px 20px;
+            align-self: flex-start;
+        }
+
+        .msg-ai {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px); border: 1px solid rgba(168,85,247,0.2);
+            border-right: 3px solid #a855f7; color: #cbd5e1;
+            border-radius: 4px 20px 20px 20px;
+            align-self: flex-end; max-width: 90%;
+        }
+
+        /* منوی اتچمنت */
+        .attachment-menu {
+            position: absolute; bottom: 100%; right: 0; left: 0;
+            margin-bottom: 10px; padding: 15px;
+            border-radius: 20px;
+            display: flex; justify-content: space-around;
+            transform: translateY(20px); opacity: 0; pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .attachment-menu.active {
+            transform: translateY(0); opacity: 1; pointer-events: auto;
+        }
+        .attach-btn {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            color: rgba(255,255,255,0.7); transition: all 0.2s;
+        }
+        .attach-btn:active { transform: scale(0.9); color: white; }
+        .attach-icon-bg {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* استایل‌های مارک‌داون */
+        .prose pre { background: #0f172a !important; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin: 10px 0; overflow-x: auto; direction: ltr; font-family: monospace; }
+        .prose code { color: #22d3ee; font-size: 0.9em; background: rgba(34,211,238,0.1); padding: 2px 4px; border-radius: 4px; }
+        .prose pre code { background: transparent; padding: 0; }
+        .prose p { margin-bottom: 0.8em; }
+        .prose strong { color: #a855f7; font-weight: 800; }
+        .prose ul, .prose ol { padding-right: 20px; }
+
+        #chatContainer::-webkit-scrollbar { width: 4px; }
+        #chatContainer::-webkit-scrollbar-thumb { background: rgba(6,182,212,0.3); border-radius: 4px; }
+
+        .typing-dot { width: 6px; height: 6px; background: #a855f7; border-radius: 50%; animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; } .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; box-shadow: 0 0 15px #a855f7; } }
+    </style>
+</head>
+<body class="selection:bg-cyan-500/30 selection:text-cyan-100">
+
+    <canvas id="neuralCanvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
+    <div class="hex-bg"></div>
+    <div class="fixed inset-0 pointer-events-none z-[1] overflow-hidden"><div class="w-full h-2 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent absolute top-0 animate-[scan_5s_linear_infinite]"></div></div>
+    @keyframes scan { 0% { top: -10%; } 100% { top: 110%; } }
+
+    <div class="relative z-20 pt-4 pb-2 bg-gradient-to-b from-black via-black/80 to-transparent">
+        <div class="text-center">
+            <div id="avatar-container"></div>
+            
+            <h1 class="text-3xl font-black tracking-[0.2em] mt-2">
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]">
+                    NEXORA AI
+                </span>
+            </h1>
+            <div class="flex justify-center items-center gap-2 mt-1 opacity-80">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                </span>
+                <span class="text-[10px] font-mono text-cyan-400 tracking-[0.3em]">HOLOGRAPHIC SYSTEM V2</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="chatContainer" class="flex-1 overflow-y-auto px-4 py-2 space-y-5 flex flex-col z-10 pb-36 w-full max-w-3xl mx-auto">
+        <div class="msg-ai p-5 animate-[slideUp_0.5s_ease-out]">
+            <div class="flex items-center gap-2 mb-3 pb-2 border-b border-purple-500/20">
+                <svg class="w-4 h-4 text-purple-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+                <span class="text-xs font-bold text-purple-400 tracking-widest">NEXORA CORE INITIALIZED</span>
+            </div>
+            <p class="text-sm leading-8 font-light prose">سیستم هولوگرافیک فعال شد. آماده دریافت دستورات شما هستم.</p>
+        </div>
+    </div>
+
+    <div class="fixed bottom-0 left-0 right-0 z-30 p-4">
+        <div class="max-w-3xl mx-auto relative group">
+            
+            <div id="attachMenu" class="glass-panel attachment-menu">
+                <div class="attach-btn" onclick="handleAttachClick('photo')">
+                    <div class="attach-icon-bg"><svg class="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
+                    <span class="text-xs">عکس</span>
+                </div>
+                <div class="attach-btn" onclick="handleAttachClick('file')">
+                    <div class="attach-icon-bg"><svg class="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg></div>
+                    <span class="text-xs">فایل</span>
+                </div>
+                <div class="attach-btn" onclick="handleAttachClick('voice')">
+                    <div class="attach-icon-bg"><svg class="w-6 h-6 text-pink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg></div>
+                    <span class="text-xs">وویس</span>
+                </div>
+                 <div class="attach-btn" onclick="handleAttachClick('location')">
+                    <div class="attach-icon-bg"><svg class="w-6 h-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+                    <span class="text-xs">مکان</span>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-2xl p-2 flex items-end gap-2 relative overflow-hidden z-20">
+                <button id="attachToggleBtn" class="p-3 text-cyan-500/70 hover:text-cyan-400 transition-colors active:scale-90">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                </button>
+
+                <textarea id="messageInput" rows="1" class="flex-1 bg-transparent text-white p-3 max-h-32 outline-none resize-none text-sm placeholder-gray-500 font-light" placeholder="پیام..."></textarea>
+                
+                <button id="sendBtn" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-600 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed z-10">
+                    <svg id="sendIcon" class="w-5 h-5 text-white rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    <svg id="loadingIcon" class="w-5 h-5 text-white animate-spin hidden" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =======================================================
+        // 🔴 آدرس وب‌هوک خود را اینجا وارد کنید
+        // =======================================================
+        const N8N_WEBHOOK_URL = 'https://50356-4vb9a.s3.irann8n.com/webhook/c672b169-fcf2-4c16-8b53-c0fe4835125e'; 
+        // =======================================================
+
+        const tg = window.Telegram.WebApp;
+        if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
+
+        marked.use({ breaks: true });
+
+        // --- المان‌ها ---
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const sendIcon = document.getElementById('sendIcon');
+        const loadingIcon = document.getElementById('loadingIcon');
+        const attachToggleBtn = document.getElementById('attachToggleBtn');
+        const attachMenu = document.getElementById('attachMenu');
+
+        // --- مدیریت اتچمنت و هپتیک ---
+        attachToggleBtn.addEventListener('click', () => {
+            attachMenu.classList.toggle('active');
+            hapticFeedback('light');
+        });
+
+        function handleAttachClick(type) {
+             hapticFeedback('medium');
+             // اینجا در آینده کدهای مربوط به باز شدن فایل پیکر تلگرام قرار می‌گیرد
+             // فعلاً یک پیام نمایشی می‌دهیم
+             appendMessage(`[ارسال ${type} فعلاً غیرفعال است]`, 'user');
+             attachMenu.classList.remove('active');
+        }
+
+        // تابع کمکی برای هپتیک فیدبک پیشرفته
+        function hapticFeedback(type) {
+            if (!tg.HapticFeedback) return;
+            switch(type) {
+                case 'light': tg.HapticFeedback.impactOccurred('light'); break;
+                case 'medium': tg.HapticFeedback.impactOccurred('medium'); break;
+                case 'heavy': tg.HapticFeedback.impactOccurred('heavy'); break;
+                case 'success': tg.HapticFeedback.notificationOccurred('success'); break;
+                case 'error': tg.HapticFeedback.notificationOccurred('error'); break;
+            }
+        }
+
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; if(this.value === '') this.style.height = 'auto';
+        });
+
+        // --- توابع چت ---
+        function appendMessage(text, sender) {
+            const div = document.createElement('div');
+            const isUser = sender === 'user';
+            div.className = isUser ? 'msg-user p-4 max-w-[85%] animate-[slideUp_0.3s_ease-out]' : 'msg-ai p-5 animate-[slideUp_0.3s_ease-out]';
+            
+            let headerHTML = '';
+            if (!isUser) {
+                headerHTML = `
+                <div class="flex items-center gap-2 mb-3 pb-2 border-b border-purple-500/20">
+                    <svg class="w-4 h-4 text-purple-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    <span class="text-[10px] font-bold text-purple-400 tracking-widest">NEXORA CORE</span>
+                </div>`;
+            }
+
+            div.innerHTML = `${headerHTML}<div class="prose text-sm leading-8 font-light">${isUser ? text : marked.parse(text)}</div>
+                             <div class="text-[10px] opacity-50 text-left mt-3 font-mono tracking-wider">${new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12: false})}</div>`;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function showTyping() {
+            const div = document.createElement('div'); div.id = 'typingIndicator';
+            div.className = 'msg-ai p-4 w-fit rounded-2xl border border-purple-500/30';
+            div.innerHTML = `<div class="flex gap-1.5"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+            chatContainer.appendChild(div); scrollToBottom();
+        }
+        function removeTyping() { const el = document.getElementById('typingIndicator'); if (el) el.remove(); }
+        function scrollToBottom() { chatContainer.scrollTop = chatContainer.scrollHeight; }
+
+        async function handleSend() {
+            const text = messageInput.value.trim(); if (!text) return;
+            hapticFeedback('light'); // ویبره هنگام ارسال
+            attachMenu.classList.remove('active'); // بستن منوی اتچمنت اگر باز بود
+
+            appendMessage(text, 'user');
+            messageInput.value = ''; messageInput.style.height = 'auto';
+            sendBtn.disabled = true; sendIcon.classList.add('hidden'); loadingIcon.classList.remove('hidden');
+            showTyping();
+
+            try {
+                const user = tg.initDataUnsafe?.user || {};
+                const response = await fetch(N8N_WEBHOOK_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, userId: user.id || 'unknown', username: user.username || 'unknown', firstName: user.first_name || '', timestamp: new Date().toISOString() })
+                });
+                if (!response.ok) throw new Error('API Error');
+                const data = await response.json();
+                const reply = data.response || data.output || data.message || JSON.stringify(data);
+                removeTyping(); appendMessage(reply, 'ai');
+                hapticFeedback('success'); // ویبره موفقیت
+            } catch (err) {
+                console.error(err); removeTyping(); appendMessage("⚠️ خطای ارتباط با سرور.", 'ai');
+                hapticFeedback('error'); // ویبره خطا
+            } finally {
+                sendBtn.disabled = false; sendIcon.classList.remove('hidden'); loadingIcon.classList.add('hidden'); messageInput.focus();
+            }
+        }
+
+        sendBtn.addEventListener('click', handleSend);
+        messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
+
+        // --- Three.js: آواتار سه‌بعدی هولوگرافیک ---
+        const avatarContainer = document.getElementById('avatar-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(120, 120);
+        renderer.domElement.id = 'avatar-canvas';
+        avatarContainer.appendChild(renderer.domElement);
+
+        // ساخت مدل هندسی (سر ربات)
+        const geometry = new THREE.IcosahedronGeometry(1.8, 1);
+        const material = new THREE.MeshPhongMaterial({
+            color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.5,
+            emissive: 0x06b6d4, emissiveIntensity: 0.5
+        });
+        const sphere = new THREE.Mesh(geometry, material);
+        scene.add(sphere);
+
+        // حلقه‌های دور سر
+        const ringGeo = new THREE.TorusGeometry(2.5, 0.05, 16, 100);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.7 });
+        const ring1 = new THREE.Mesh(ringGeo, ringMat);
+        const ring2 = new THREE.Mesh(ringGeo, ringMat);
+        ring2.rotation.x = Math.PI / 2;
+        scene.add(ring1); scene.add(ring2);
+
+        // نورپردازی
+        const light1 = new THREE.PointLight(0x06b6d4, 2, 50); light1.position.set(5, 5, 5); scene.add(light1);
+        const light2 = new THREE.PointLight(0xa855f7, 2, 50); light2.position.set(-5, -5, 5); scene.add(light2);
+        camera.position.z = 5;
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            sphere.rotation.x += 0.005; sphere.rotation.y += 0.01;
+            ring1.rotation.x += 0.02; ring1.rotation.y += 0.01;
+            ring2.rotation.x += 0.01; ring2.rotation.z += 0.02;
+            renderer.render(scene, camera);
+        }
+        animate3D();
+
+        // --- شبکه عصبی واکنش‌گرا به تاچ ---
+        const neuralCanvas = document.getElementById('neuralCanvas');
+        const nCtx = neuralCanvas.getContext('2d');
+        let nParticles = [];
+        let mouse = { x: null, y: null, radius: 100 }; // شعاع تأثیر موس/تاچ
+
+        function resizeNeural() { neuralCanvas.width = window.innerWidth; neuralCanvas.height = window.innerHeight; }
+        window.addEventListener('resize', resizeNeural); resizeNeural();
+
+        window.addEventListener('mousemove', (e) => { mouse.x = e.x; mouse.y = e.y; });
+        window.addEventListener('touchmove', (e) => { mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; });
+        window.addEventListener('touchend', () => { mouse.x = null; mouse.y = null; });
+        window.addEventListener('mouseout', () => { mouse.x = null; mouse.y = null; });
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * neuralCanvas.width; this.y = Math.random() * neuralCanvas.height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.baseX = this.x; this.baseY = this.y;
+                this.density = (Math.random() * 30) + 1;
+            }
+            draw() {
+                nCtx.fillStyle = 'rgba(6, 182, 212, 0.6)';
+                nCtx.beginPath(); nCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2); nCtx.closePath(); nCtx.fill();
+            }
+            update() {
+                let dx = mouse.x - this.x; let dy = mouse.y - this.y;
+                let distance = Math.sqrt(dx*dx + dy*dy);
+                let forceDirectionX = dx / distance; let forceDirectionY = dy / distance;
+                let maxDistance = mouse.radius;
+                let force = (maxDistance - distance) / maxDistance;
+                let directionX = forceDirectionX * force * this.density;
+                let directionY = forceDirectionY * force * this.density;
+
+                if (distance < mouse.radius) {
+                    this.x -= directionX; this.y -= directionY; // فرار از موس
+                } else {
+                    // بازگشت به موقعیت اولیه
+                    if (this.x !== this.baseX) { let dx = this.x - this.baseX; this.x -= dx/10; }
+                    if (this.y !== this.baseY) { let dy = this.y - this.baseY; this.y -= dy/10; }
+                }
+            }
+        }
+
+        for (let i = 0; i < 70; i++) { nParticles.push(new Particle()); }
+
+        function animateNeural() {
+            nCtx.clearRect(0, 0, neuralCanvas.width, neuralCanvas.height);
+            for (let i = 0; i < nParticles.length; i++) {
+                nParticles[i].draw(); nParticles[i].update();
+                // رسم خطوط شبکه عصبی
+                for (let j = i; j < nParticles.length; j++) {
+                    let dx = nParticles[i].x - nParticles[j].x;
+                    let dy = nParticles[i].y - nParticles[j].y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < 100) {
+                        nCtx.beginPath(); nCtx.strokeStyle = `rgba(6, 182, 212, ${0.3 - distance/100})`;
+                        nCtx.lineWidth = 0.5; nCtx.moveTo(nParticles[i].x, nParticles[i].y);
+                        nCtx.lineTo(nParticles[j].x, nParticles[j].y); nCtx.stroke();
+                        nCtx.closePath();
+                    }
+                }
+            }
+            requestAnimationFrame(animateNeural);
+        }
+        animateNeural();
+    </script>
+</body>
+</html>
