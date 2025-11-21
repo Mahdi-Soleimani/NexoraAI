@@ -292,7 +292,8 @@
                 console.error(err); removeTyping(); appendMessage("⚠️ خطای ارتباط با سرور.", 'ai');
                 hapticFeedback('error');
             } finally {
-                sendBtn.disabled = false; sendIcon.classList.remove('hidden'); loadingIcon.classList.add('hidden'); messageInput.focus();
+                sendBtn.disabled = false; sendIcon.classList.remove('hidden'); loadingIcon.classList.add('hidden');
+                // messageInput.focus();
             }
         }
 
