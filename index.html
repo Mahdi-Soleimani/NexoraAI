@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexora AI Ultimate V6 (Safe History Load)</title>
+    <title>Nexora AI Ultimate V7 (Robust)</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -298,7 +298,7 @@
         });
 
         // =======================================================
-        // 📥 بخش لود کردن تاریخچه از سرور (اصلاح شده)
+        // 📥 بخش لود کردن تاریخچه از سرور (تضمینی)
         // =======================================================
         async function loadChatHistory() {
             const user = tg.initDataUnsafe?.user || { id: 'test_user', first_name: 'Test' };
@@ -310,9 +310,9 @@
                 </div>
             `;
 
-            // بررسی امنیتی برای جلوگیری از ارور
+            // بررسی امنیتی برای جلوگیری از ارور اگر لینک ست نشده باشد
             if (!N8N_HISTORY_URL || !N8N_HISTORY_URL.startsWith('http')) {
-                console.warn('History webhook not set properly. Skipping fetch.');
+                console.warn('History webhook not set properly. Using Default.');
                 chatContainer.innerHTML = '';
                 renderMessage({
                     text: "سلام من نکسورا دستیار هوشمند سازمانی هستم. چه کمکی ازم بر میاد؟",
@@ -332,24 +332,36 @@
                 if (!response.ok) throw new Error('History Fetch Error');
 
                 const historyData = await response.json();
+                console.log("Raw History Data:", historyData); // برای دیباگ در کنسول
+
                 chatContainer.innerHTML = '';
 
                 let allMessages = [];
                 
+                // --- بخش اصلاح شده برای باز کردن ساختار تو در تو (Nested) ---
                 if (Array.isArray(historyData)) {
                     historyData.forEach(item => {
+                        // اگر n8n ساختار { messages: [...] } فرستاده باشد
                         if (item.messages && Array.isArray(item.messages)) {
                             allMessages.push(...item.messages);
-                        } else {
+                        } 
+                        // اگر n8n ساختار ساده فرستاده باشد
+                        else {
                             allMessages.push(item);
                         }
                     });
+                } else if (historyData && historyData.messages && Array.isArray(historyData.messages)) {
+                    // اگر کل پاسخ یک آبجکت تکی با فیلد messages باشد
+                    allMessages.push(...historyData.messages);
                 }
 
                 if (allMessages.length > 0) {
                     allMessages.forEach(msg => {
+                        // اطمینان از اینکه متن وجود دارد
+                        const msgText = msg.text || msg.message || msg.content || "...";
+                        
                         renderMessage({
-                            text: msg.text || msg.message || "...",
+                            text: msgText,
                             sender: msg.sender || msg.role || 'ai',
                             time: msg.time || ''
                         });
@@ -438,7 +450,7 @@
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
         });
 
-        // --- رندر کردن پیام (مشترک برای تاریخچه و چت جدید) ---
+        // --- رندر کردن پیام ---
         function renderMessage(msgData) {
             const senderKey = (msgData.sender || msgData.role || 'ai').toLowerCase();
             const isUser = senderKey === 'user';
