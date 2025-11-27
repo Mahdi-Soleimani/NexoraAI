@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexora AI Ultimate V4 (DB Connected)</title>
+    <title>Nexora AI Ultimate V6 (Safe History Load)</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -298,7 +298,7 @@
         });
 
         // =======================================================
-        // 📥 بخش لود کردن تاریخچه از سرور (جدید)
+        // 📥 بخش لود کردن تاریخچه از سرور (اصلاح شده)
         // =======================================================
         async function loadChatHistory() {
             const user = tg.initDataUnsafe?.user || { id: 'test_user', first_name: 'Test' };
@@ -310,12 +310,20 @@
                 </div>
             `;
 
+            // بررسی امنیتی برای جلوگیری از ارور
+            if (!N8N_HISTORY_URL || !N8N_HISTORY_URL.startsWith('http')) {
+                console.warn('History webhook not set properly. Skipping fetch.');
+                chatContainer.innerHTML = '';
+                renderMessage({
+                    text: "سلام من نکسورا دستیار هوشمند سازمانی هستم. چه کمکی ازم بر میاد؟",
+                    sender: 'ai',
+                    time: new Date().toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})
+                });
+                return;
+            }
+
             try {
-                // ارسال درخواست به وب‌هوک تاریخچه با پارامتر userId
-                // مثال: webhook_url?userId=12345
                 const urlWithParams = `${N8N_HISTORY_URL}?userId=${user.id}`;
-                
-                // نکته: اگر وب‌هوک شما متد POST می‌خواهد، این قسمت fetch را تغییر دهید
                 const response = await fetch(urlWithParams, {
                     method: 'GET', 
                     headers: { 'Content-Type': 'application/json' }
@@ -324,17 +332,25 @@
                 if (!response.ok) throw new Error('History Fetch Error');
 
                 const historyData = await response.json();
-                
-                // پاک کردن لودر
                 chatContainer.innerHTML = '';
 
-                // چک کردن اینکه آیا دیتای برگشتی آرایه است
-                if (Array.isArray(historyData) && historyData.length > 0) {
-                    historyData.forEach(msg => {
-                        // انتظار می‌رود آبجکت پیام شامل sender باشد: 'user' یا 'ai'
+                let allMessages = [];
+                
+                if (Array.isArray(historyData)) {
+                    historyData.forEach(item => {
+                        if (item.messages && Array.isArray(item.messages)) {
+                            allMessages.push(...item.messages);
+                        } else {
+                            allMessages.push(item);
+                        }
+                    });
+                }
+
+                if (allMessages.length > 0) {
+                    allMessages.forEach(msg => {
                         renderMessage({
-                            text: msg.text || msg.message || "...", // پشتیبانی از نام‌های مختلف
-                            sender: msg.sender || msg.role || 'ai', // تشخیص فرستنده
+                            text: msg.text || msg.message || "...",
+                            sender: msg.sender || msg.role || 'ai',
                             time: msg.time || ''
                         });
                     });
@@ -350,7 +366,6 @@
             } catch (error) {
                 console.error("Load History Error:", error);
                 chatContainer.innerHTML = '';
-                // در صورت خطا، پیام پیش‌فرض خوش‌آمد گویی
                 renderMessage({
                     text: "سلام من نکسورا دستیار هوشمند سازمانی هستم. چه کمکی ازم بر میاد؟",
                     sender: 'ai',
@@ -368,12 +383,9 @@
 
             closeMenu();
 
-            // 1. نمایش پیام کاربر در صفحه (فقط نمایش، ذخیره واقعی در n8n انجام می‌شود)
             if (!text) { 
                 renderMessage({ text: userMsg, sender: 'user', time: new Date().toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'}) });
                 messageInput.value = ''; messageInput.style.height = 'auto';
-            } else if (attachment) {
-                // برای فایل‌ها پیام قبلاً هندل شده یا می‌شود
             }
 
             sendBtn.disabled = true; sendIcon.classList.add('hidden'); loadingIcon.classList.remove('hidden');
@@ -391,7 +403,6 @@
                     attachment: attachment 
                 };
 
-                // ارسال به وب‌هوک اصلی چت
                 const response = await fetch(N8N_CHAT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -401,11 +412,9 @@
                 if (!response.ok) throw new Error('Network error');
                 
                 const data = await response.json();
-                const reply = data.response || data.output || data.message || JSON.stringify(data);
+                const reply = data.response || data.output || data.message || (data.text ? data.text : JSON.stringify(data));
                 
                 removeTyping();
-                
-                // 2. نمایش جواب هوش مصنوعی
                 renderMessage({ 
                     text: reply, 
                     sender: 'ai', 
@@ -431,7 +440,6 @@
 
         // --- رندر کردن پیام (مشترک برای تاریخچه و چت جدید) ---
         function renderMessage(msgData) {
-            // نرمال‌سازی sender (ممکن است دیتابیس role برگرداند)
             const senderKey = (msgData.sender || msgData.role || 'ai').toLowerCase();
             const isUser = senderKey === 'user';
             
@@ -462,8 +470,6 @@
         function removeTyping() { const el = document.getElementById('typingIndicator'); if (el) el.remove(); }
         function scrollToBottom() { setTimeout(() => chatContainer.scrollTop = chatContainer.scrollHeight, 100); }
 
-        // --- شروع برنامه ---
-        // به جای initWelcome، حالا تاریخچه را لود می‌کنیم
         window.addEventListener('load', loadChatHistory);
 
         // --- هندل کردن فایل‌ها ---
